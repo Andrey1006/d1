@@ -10,10 +10,45 @@ struct SettingsView: View {
     @State private var newCoefficientText = ""
     @State private var showExportSheet = false
     @State private var exportURL: URL?
+    @State private var showPrivacyPolicy = false
+
+    private let privacyPolicyURL = URL(string: "https://sites.google.com/view/1xbasepractice/privacy-policy")!
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
+                PSSettingsSectionTitle(text: "Goals")
+                PSSettingsCellGroup {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Text("Daily goal (minutes)")
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(PSTheme.textPrimary)
+                            Spacer()
+                            Text("\(store.dailyGoalMinutes)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(PSTheme.textSecondary)
+                        }
+
+                        Stepper(
+                            value: Binding(
+                                get: { store.dailyGoalMinutes },
+                                set: { store.setDailyGoalMinutes($0) }
+                            ),
+                            in: 5...240,
+                            step: 5
+                        ) {
+                            Text(" ")
+                        }
+                        .labelsHidden()
+
+                        Text("Current streak: \(store.currentStreakDays)d · Best: \(store.bestStreakDays)d")
+                            .font(.caption)
+                            .foregroundStyle(PSTheme.textSecondary)
+                    }
+                    .padding(16)
+                }
+
                 PSSettingsSectionTitle(text: "Practice types")
                 PSSettingsCellGroup {
                     ForEach(Array(store.practiceTypes.enumerated()), id: \.element.id) { index, type in
@@ -147,6 +182,29 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
 
+                PSSettingsSectionTitle(text: "Legal")
+                PSSettingsCellGroup {
+                    Button {
+                        showPrivacyPolicy = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "hand.raised.fill")
+                                .foregroundStyle(PSTheme.accent)
+                            Text("Privacy Policy")
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(PSTheme.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(PSTheme.textSecondary.opacity(0.7))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 PSSettingsSectionTitle(text: "Danger zone")
                 PSSettingsCellGroup {
                     Button {
@@ -183,6 +241,10 @@ struct SettingsView: View {
             if let url = exportURL {
                 ActivityShareView(items: [url])
             }
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            SafariView(url: privacyPolicyURL)
+                .ignoresSafeArea()
         }
         .confirmationDialog(
             "Delete all sessions and restore default practice types?",

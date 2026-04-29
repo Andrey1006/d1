@@ -34,6 +34,36 @@ struct SessionView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                PSCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Daily goal")
+                            .font(.caption)
+                            .foregroundStyle(PSTheme.textSecondary)
+
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("\(store.todayPracticeSeconds / 60) min")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(PSTheme.textPrimary)
+                            Text("of \(store.dailyGoalMinutes) min")
+                                .font(.subheadline)
+                                .foregroundStyle(PSTheme.textSecondary)
+                            Spacer()
+                            Text("Streak \(store.currentStreakDays)d")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(store.todayGoalMet ? PSTheme.accent : PSTheme.textSecondary)
+                        }
+
+                        ProgressView(value: store.todayProgress)
+                            .tint(PSTheme.accent)
+
+                        if store.bestStreakDays > 0 {
+                            Text("Best streak: \(store.bestStreakDays)d")
+                                .font(.caption2)
+                                .foregroundStyle(PSTheme.textSecondary)
+                        }
+                    }
+                }
+
                 if !store.recentSessionCombos().isEmpty {
                     PSCard {
                         VStack(alignment: .leading, spacing: 10) {

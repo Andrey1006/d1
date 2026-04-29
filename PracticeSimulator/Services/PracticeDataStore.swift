@@ -11,6 +11,7 @@ final class PracticeDataStore: ObservableObject {
         static let templates = "ps.sessionTemplates"
         static let customCoeffs = "ps.customCoefficients"
         static let reportingPeriod = "ps.reportingPeriod"
+        static let dailyGoalMinutes = "ps.dailyGoalMinutes"
     }
 
     @Published private(set) var practiceTypes: [PracticeType] = []
@@ -18,11 +19,14 @@ final class PracticeDataStore: ObservableObject {
     @Published private(set) var sessionTemplates: [SessionTemplate] = []
     @Published private(set) var customCoefficients: [Double] = []
     @Published var reportingPeriod: ReportingPeriod = .all
+    @Published var dailyGoalMinutes: Int = 20
 
     private let defaults: UserDefaults
+    private let calendar: Calendar
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, calendar: Calendar = .current) {
         self.defaults = defaults
+        self.calendar = calendar
         load()
         if practiceTypes.isEmpty {
             seedDefaults()
@@ -188,13 +192,98 @@ final class PracticeDataStore: ObservableObject {
         sessionTemplates = []
         customCoefficients = []
         reportingPeriod = .all
+        dailyGoalMinutes = 20
         defaults.removeObject(forKey: Keys.types)
         defaults.removeObject(forKey: Keys.sessions)
         defaults.removeObject(forKey: Keys.templates)
         defaults.removeObject(forKey: Keys.customCoeffs)
         defaults.removeObject(forKey: Keys.reportingPeriod)
+        defaults.removeObject(forKey: Keys.dailyGoalMinutes)
         seedDefaults()
         save()
+    }
+
+    func setDailyGoalMinutes(_ minutes: Int) {
+        dailyGoalMinutes = max(1, min(600, minutes))
+        save()
+    }
+
+    var dailyGoalSeconds: Int {
+        max(60, dailyGoalMinutes * 60)
+    }
+
+    var todayPracticeSeconds: Int {
+        totalPracticeSeconds(on: Date())
+    }
+
+    var todayProgress: Double {
+        min(1, Double(todayPracticeSeconds) / Double(dailyGoalSeconds))
+    }
+
+    var todayGoalMet: Bool {
+        todayPracticeSeconds >= dailyGoalSeconds
+    }
+
+    var currentStreakDays: Int {
+        streakEnding(on: Date())
+    }
+
+    var bestStreakDays: Int {
+        bestStreak()
+    }
+
+    private func totalPracticeSeconds(on date: Date) -> Int {
+        let day = calendar.startOfDay(for: date)
+        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { return 0 }
+        return sessions
+            .filter { $0.endedAt >= day && $0.endedAt < nextDay }
+            .reduce(0) { $0 + max(0, $1.durationSeconds) }
+    }
+
+    private func goalMet(on date: Date) -> Bool {
+        totalPracticeSeconds(on: date) >= dailyGoalSeconds
+    }
+
+    private func streakEnding(on date: Date) -> Int {
+        var count = 0
+        var cursor = calendar.startOfDay(for: date)
+        while true {
+            if goalMet(on: cursor) {
+                count += 1
+            } else {
+                break
+            }
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return count
+    }
+
+    private func bestStreak() -> Int {
+        var daysWithGoal: Set<Date> = []
+        for s in sessions {
+            let d = calendar.startOfDay(for: s.endedAt)
+            if goalMet(on: d) {
+                daysWithGoal.insert(d)
+            }
+        }
+        if daysWithGoal.isEmpty { return 0 }
+        let sorted = daysWithGoal.sorted(by: >)
+
+        var best = 1
+        var current = 1
+        for i in 1..<sorted.count {
+            let prev = sorted[i - 1]
+            let cur = sorted[i]
+            if let expected = calendar.date(byAdding: .day, value: -1, to: prev),
+               calendar.isDate(cur, inSameDayAs: expected) {
+                current += 1
+                best = max(best, current)
+            } else {
+                current = 1
+            }
+        }
+        return best
     }
 
     private func seedDefaults() {
@@ -230,6 +319,10 @@ final class PracticeDataStore: ObservableObject {
            let p = ReportingPeriod(rawValue: raw) {
             reportingPeriod = p
         }
+        let goal = defaults.integer(forKey: Keys.dailyGoalMinutes)
+        if goal > 0 {
+            dailyGoalMinutes = goal
+        }
     }
 
     private func save() {
@@ -249,5 +342,6 @@ final class PracticeDataStore: ObservableObject {
             defaults.set(data, forKey: Keys.customCoeffs)
         }
         defaults.set(reportingPeriod.rawValue, forKey: Keys.reportingPeriod)
+        defaults.set(dailyGoalMinutes, forKey: Keys.dailyGoalMinutes)
     }
 }
